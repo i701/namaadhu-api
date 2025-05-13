@@ -23,7 +23,13 @@ def get_prayer_times(
         # Parse MM/DD/YYYY
         month, day, year = map(int, date_input.split("/"))
         date = datetime(year, month, day)
-    except ValueError:
+    except ValueError as e:
+        print(e)
+        if "day is out of range for month" in str(e):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid date. The specified date does not exist.",
+            )
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use MM/DD/YYYY"
         )
