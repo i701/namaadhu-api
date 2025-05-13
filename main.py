@@ -17,11 +17,11 @@ def minutes_to_hhmm(minutes: int) -> str:
 
 @app.get("/prayertimes/")
 def get_prayer_times(
-    date_str: str, output: str = "xml", category_id: int = CATEGORY_ID
+    date_input: str, output: str = "xml", category_id: int = CATEGORY_ID
 ):
     try:
         # Parse MM/DD/YYYY
-        month, day, year = map(int, date_str.split("/"))
+        month, day, year = map(int, date_input.split("/"))
         date = datetime(year, month, day)
     except ValueError:
         raise HTTPException(
