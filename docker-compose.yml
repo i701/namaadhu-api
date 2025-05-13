@@ -1,0 +1,8 @@
+services:
+  api:
+    build:
+      context: .
+    container_name: namaadhu-api
+    ports:
+      - '4040:4040'
+    restart: "unless-stopped"
