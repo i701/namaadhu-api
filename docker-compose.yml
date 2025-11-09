@@ -4,5 +4,7 @@ services:
       context: .
     container_name: namaadhu-api
     ports:
-      - '4040:4040'
+      - "4040:4040"
+    volumes:
+      - ./data:/code/app/data
     restart: "unless-stopped"
