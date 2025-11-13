@@ -3,6 +3,14 @@ from bs4 import BeautifulSoup
 import httpx
 from datetime import datetime
 from database import init_db, get_cached_prayer_times, save_prayer_times
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -139,6 +147,73 @@ async def get_prayer_times(date_input: str, output: str = "xml"):
         media_type="application/xml",
         headers={"Content-Disposition": "attachment; filename=prayer_times.xml"},
     )
+
+
+@app.get("/prayertimes/year/{year}")
+async def get_yearly_prayer_times(year: int):
+    import datetime
+
+    results = []
+    for month in range(1, 13):
+        for day in range(1, 32):
+            try:
+                date_obj = datetime.date(year, month, day)
+            except ValueError:
+                continue
+
+            # Create standardized date key for caching (YYYY-MM-DD format)
+            date_key = date_obj.strftime("%Y-%m-%d")
+
+            # Check cache first
+            cached_data = get_cached_prayer_times(date_key)
+            if cached_data:
+                # Use cached data
+                results.append({
+                    "date": date_key,
+                    **cached_data
+                })
+                continue
+
+            # Cache miss - scrape the data
+            url = BASE_URL.format(island_id=ISLAND_ID, year=year, month=month, day=day)
+            async with httpx.AsyncClient() as client:
+                try:
+                    r = await client.get(url)
+                    if r.status_code != 200:
+                        continue
+                except httpx.RequestError:
+                    # Skip this date if there's a network error
+                    continue
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            table = soup.find("table", class_="prayertimes-single-day")
+            if not table:
+                continue
+
+            prayers = {}
+            for row in table.find_all("tr"): #type: ignore
+                name_tag = row.find("th", class_="prayer-name") #type: ignore
+                time_tag = row.find("td", class_="prayer-time") #type: ignore
+                if name_tag and time_tag:
+                    name = name_tag.text.strip().lower()
+                    time = time_tag.text.strip()
+                    if name in ["fajr", "duhr", "dhuhr", "asr", "maghrib", "isha"]:
+                        prayers[
+                            "fajr" if name == "fajr" else "dhuhr" if name in ["duhr", "dhuhr"] else name
+                        ] = time
+
+            # Only add to results and save to cache if we have all required prayers
+            required_prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"]
+            if all(prayer in prayers for prayer in required_prayers):
+                # Save to cache
+                save_prayer_times(date_key, prayers)
+
+                results.append({
+                    "date": date_key,
+                    **prayers
+                })
+
+    return results
 
 
 # If you want to run this locally:
